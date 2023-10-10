@@ -14,6 +14,7 @@ logging.basicConfig(
     level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
 )
 
+
 def has_no_track(cruise) -> bool:
     return cruise["geometry"]["track"] == {}
 
@@ -65,10 +66,12 @@ def cruise_add_cruise_track_from_cf():
 
         logger.info(f"Generated patch {patch}")
 
-        # response = s.patch(f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch)
+        response = s.patch(
+            f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch
+        )
 
-        # if not response.ok:
-        #    logger.critical("Error patching cruise")
+        if not response.ok:
+            logger.critical("Error patching cruise")
 
         logger.info(
             f"Cruise {cruise['expocode']} updated with trackline from {file['file_path']}"
