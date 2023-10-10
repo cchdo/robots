@@ -12,13 +12,14 @@ logger = getLogger(__name__)
 def has_no_track(cruise) -> bool:
     return cruise["geometry"]["track"] == {}
 
+
 def is_cf_netcdf_dataset(file) -> bool:
     is_cf = file["data_format"] == "cf_netcdf"
     is_dataset = file["role"] == "dataset"
     return is_cf and is_dataset
 
-def cruise_add_cruise_track_from_cf():
 
+def cruise_add_cruise_track_from_cf():
     logger.info("Loading Cruise and File information")
     cruises = s.get("https://cchdo.ucsd.edu/api/v1/cruise/all").json()
     files = s.get("https://cchdo.ucsd.edu/api/v1/file/all").json()
@@ -55,23 +56,22 @@ def cruise_add_cruise_track_from_cf():
             df = xr.load_dataset(tf.name, engine="netcdf4")
             track = df.cchdo.track
 
-        patch = [{
-            "op": "replace",
-            "path": "/geometry/track",
-            "value": track
-        }]
+        patch = [{"op": "replace", "path": "/geometry/track", "value": track}]
 
         logger.info(f"Generated patch {patch}")
 
-        #response = s.patch(f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch)
+        # response = s.patch(f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch)
 
-        #if not response.ok:
+        # if not response.ok:
         #    logger.critical("Error patching cruise")
 
-        logger.info(f"Cruise {cruise['expocode']} updated with trackline from {file['file_path']}")
+        logger.info(
+            f"Cruise {cruise['expocode']} updated with trackline from {file['file_path']}"
+        )
 
     if len(cannot_do) > 0:
         logger.info(f"Could not generate track for {len(cannot_do)} cruises")
+
 
 if __name__ == "__main__":
     cruise_add_cruise_track_from_cf()
