@@ -1,13 +1,18 @@
 from tempfile import NamedTemporaryFile
-from logging import getLogger
+import logging
 
 import xarray as xr
+from rich.logging import RichHandler
 
 import cchdo.hydro.accessors  # noqa
 from cchdo.auth.session import session as s
 
-logger = getLogger(__name__)
+logger = logging.getLogger(__name__)
 
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+)
 
 def has_no_track(cruise) -> bool:
     return cruise["geometry"]["track"] == {}
