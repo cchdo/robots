@@ -11,7 +11,7 @@ jobs:
                 python-version: '3.11'
                 cache: 'pip'
             - run: pip install -r requirements.txt
-            - name: Run Update Script
+            - name: Check and Update CCHDO Tracklines
               env:
                 CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
               run: |
