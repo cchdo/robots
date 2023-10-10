@@ -1,5 +1,9 @@
 name: Update Cruise Tracklines
-on: [workflow_dispatch]
+on: 
+    schedule:
+        # Noon UTC is about 5am San Diego time
+        - cron: "4 12 * * *"
+    workflow_dispatch:
 jobs:
     Update-Tracklines:
         runs-on: ubuntu-latest
