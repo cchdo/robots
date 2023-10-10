@@ -1,20 +1,13 @@
 from tempfile import NamedTemporaryFile
-import json
+from logging import getLogger
 
-from chalice import Chalice, Cron
-from aws_lambda_powertools import Logger
-from aws_lambda_powertools.utilities import parameters
 import xarray as xr
-import requests
 
 import cchdo.hydro.accessors  # noqa
-from cchdo.auth import CCHDOAuth
+from cchdo.auth.session import session as s
 
-logger = Logger()
+logger = getLogger(__name__)
 
-secrets_provider = parameters.SecretsProvider()
-
-app = Chalice(app_name='auto_track')
 
 def has_no_track(cruise) -> bool:
     return cruise["geometry"]["track"] == {}
@@ -24,16 +17,11 @@ def is_cf_netcdf_dataset(file) -> bool:
     is_dataset = file["role"] == "dataset"
     return is_cf and is_dataset
 
-@app.schedule(Cron('0', '12', '*', '*', '?', '*'))  # Execute very day at 12PM
-def cruise_add_cruise_track_from_cf(event):
-
-    logger.info("Getting CCHDO API Key")
-    api_key = json.loads(secrets_provider.get("cchdo_robot_api_key"))
-    cchdo_auth = CCHDOAuth(api_key["cchdo_robot_api_key"])
+def cruise_add_cruise_track_from_cf():
 
     logger.info("Loading Cruise and File information")
-    cruises = requests.get("https://cchdo.ucsd.edu/api/v1/cruise/all", auth=cchdo_auth).json()
-    files = requests.get("https://cchdo.ucsd.edu/api/v1/file/all", auth=cchdo_auth).json()
+    cruises = s.get("https://cchdo.ucsd.edu/api/v1/cruise/all").json()
+    files = s.get("https://cchdo.ucsd.edu/api/v1/file/all").json()
 
     file_by_id = {file["id"]: file for file in files}
 
@@ -63,7 +51,7 @@ def cruise_add_cruise_track_from_cf(event):
 
         with NamedTemporaryFile() as tf:
             logger.info(f"Loading {file_url}")
-            tf.write(requests.get(file_url, auth=cchdo_auth).content)
+            tf.write(s.get(file_url).content)
             df = xr.load_dataset(tf.name, engine="netcdf4")
             track = df.cchdo.track
 
@@ -75,12 +63,15 @@ def cruise_add_cruise_track_from_cf(event):
 
         logger.info(f"Generated patch {patch}")
 
-        response = requests.patch(f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch, auth=cchdo_auth)
+        #response = s.patch(f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch)
 
-        if not response.ok:
-            logger.critical("Error patching cruise")
+        #if not response.ok:
+        #    logger.critical("Error patching cruise")
 
         logger.info(f"Cruise {cruise['expocode']} updated with trackline from {file['file_path']}")
 
     if len(cannot_do) > 0:
         logger.info(f"Could not generate track for {len(cannot_do)} cruises")
+
+if __name__ == "__main__":
+    cruise_add_cruise_track_from_cf()
