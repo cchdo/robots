@@ -1,0 +1,2 @@
+cchdo.hydro[netcdf]==1.0.2.5
+cchdo.auth==1.0.2
