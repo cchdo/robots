@@ -37,7 +37,7 @@ def make_cchdo_file_record(sumfile, fname, file_context):
                 .replace("+00:00", "Z"),
                 "name": "CCHDO Website Robot",
                 "notes": f"Sumfile generated from {file_context['file_name']} ({file_context['id']})",
-                "type": "File Generated",
+                "type": "Generated",
             }
         ],
         "file_hash": sha256(sumfile).hexdigest(),
