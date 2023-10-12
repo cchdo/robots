@@ -1,0 +1,22 @@
+name: Add Missing Cruise Sumfiles
+on: 
+    schedule:
+        # Noon UTC is about 5am San Diego time
+        - cron: "10 12 * * *"
+    workflow_dispatch:
+jobs:
+    Update-Tracklines:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Setup Python
+              uses: actions/setup-python@v4
+              with:
+                python-version: '3.11'
+                cache: 'pip'
+            - run: pip install -r requirements.txt
+            - name: Check and Add CCHDO Sumfiles
+              env:
+                CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
+              run: |
+                python sumfile_update/__main__.py
