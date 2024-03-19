@@ -73,9 +73,25 @@ def is_cf_netcdf_dataset(file) -> bool:
     is_dataset = file["role"] == "dataset"
     return is_cf and is_dataset
 
-def process_single_cruise(cruise, file_by_id):
-    ...
+def process_single_cruise(cruise, file_by_id, dtype):
+    logger.info(f"Processing Cruise: {cruise['expocode']}")
+    files = [file_by_id[id] for id in cruise["files"] if id in file_by_id]
+    dtype_files_in_dataset = list(filter(lambda f: f["data_type"] == dtype and f["role"] == "dataset", files))
+    cf_files = list(filter(lambda f: f["data_format"] == "cf_netcdf",dtype_files_in_dataset))
+    non_cf_files = list(filter(lambda f: f["data_format"] != "cf_netcdf",dtype_files_in_dataset))
+    if len(cf_files) != 1:
+        logger.warning("Found multiple CF files in dataset, this is not implimented yet")
+        return
+    
+    cf_file_hash = cf_files[0]["file_hash"]
+    for file in non_cf_files:
+        if cf_file_hash in file["file_sources"]:
+            continue
+        logger.debug(f"Found file needs updating {file['id']}")
 
+
+def examine_dataset_files(cruise, file_by_id, dtype):
+    ...
 
 def cruise_add_from_cf(dtype):
     logger.info(f"Checking and converting files for data type: {dtype}")
@@ -91,9 +107,10 @@ def cruise_add_from_cf(dtype):
     ffunc = partial(has_cf_file, files=file_by_id, dtype=dtype)
 
     cruises_with_cf = list(filter(ffunc, cruises_controlled))
-    logger.debug(cruises_with_cf)
+    for cruise in cruises_with_cf:
+        process_single_cruise(cruise, file_by_id=file_by_id, dtype=dtype)
+
     exit()
-    logger.info(f"{len(cruises_no_sum)} of {len(cruises)} cruises have no sumfile")
 
     cannot_do = []
     for cruise in cruises_no_sum:
