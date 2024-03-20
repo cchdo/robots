@@ -5,6 +5,7 @@ from base64 import b64encode
 from datetime import datetime, timezone
 from hashlib import sha256
 import argparse
+from operator import methodcaller
 
 import xarray as xr
 from rich.logging import RichHandler
@@ -83,11 +84,34 @@ def process_single_cruise(cruise, file_by_id, dtype):
         logger.warning("Found multiple CF files in dataset, this is not implimented yet")
         return
     
-    cf_file_hash = cf_files[0]["file_hash"]
+    cf_file = cf_files[0]
+    cf_file_hash = cf_file["file_hash"]
+    files_need_replacing = dict()
     for file in non_cf_files:
         if cf_file_hash in file["file_sources"]:
             continue
-        logger.debug(f"Found file needs updating {file['id']}")
+        files_need_replacing[file["id"]] = file["data_format"]
+
+    logger.debug(files_need_replacing)
+    if any(files_need_replacing):
+        file_url = f'https://cchdo.ucsd.edu{cf_file["file_path"]}'
+
+        with NamedTemporaryFile() as tf:
+            logger.info(f"Loading {file_url}")
+            tf.write(s.get(file_url).content)
+            df = xr.load_dataset(tf.name, engine="netcdf4")
+        
+        for fid, format in files_need_replacing.items():
+            func = {
+                "woce": methodcaller("to_woce"),
+                "whp_netcdf": methodcaller("to_coards"),
+                "exchange": methodcaller("to_exchange"),
+            }[format]
+            try:
+                data = func(df.cchdo)
+            except Exception:
+                logger.error(f"Crash on {format} conversion")
+                pass
 
 
 def examine_dataset_files(cruise, file_by_id, dtype):
