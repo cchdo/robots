@@ -17,37 +17,55 @@ logger = logging.getLogger(__name__)
 
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+    level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
 )
 
+TO_FTPYE = {
+    "woce": "woce",
+    "exchange": "exchange",
+    "whp_netcdf": "coards",
+}
+TO_FTPYE_MIME = {
+    "ctd": {
+        "woce": "application/zip",
+        "exchange": "application/zip",
+        "whp_netcdf": "application/zip",
+    },
+    "bottle": {
+        "woce": "text/plain",
+        "exchange": "text/csv",
+        "whp_netcdf": "application/zip",
+    },
+}
 
-def make_cchdo_file_record(sumfile, fname, file_context):
+
+def make_cchdo_file_record(data: bytes, fname, file_context, mime="text/plain", data_format="exchange", dtype="ctd"):
     return {
         "file": {
-            "type": "text/plain",
+            "type": mime,
             "name": fname,
-            "body": b64encode(sumfile).decode("ascii"),
+            "body": b64encode(data).decode("ascii"),
         },
         "container_contents": [],
         "data_container": "",
-        "data_format": "woce",
-        "data_type": "summary",
+        "data_format": data_format,
+        "data_type": dtype,
         "events": [
             {
                 "date": datetime.now(tz=timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
                 "name": "CCHDO Website Robot",
-                "notes": f"Sumfile generated from {file_context['file_name']} ({file_context['id']})",
+                "notes": f"Generated from {file_context['file_name']} ({file_context['id']})",
                 "type": "Generated",
             }
         ],
-        "file_hash": sha256(sumfile).hexdigest(),
+        "file_hash": sha256(data).hexdigest(),
         "file_name": fname,
         "file_path": "",
-        "file_size": len(sumfile),
-        "file_sources": [],
-        "file_type": "text/plain",
+        "file_size": len(data),
+        "file_sources": [file_context["file_hash"]],
+        "file_type": mime,
         "other_roles": [],
         "permissions": [],
         "role": "dataset",
@@ -77,6 +95,7 @@ def is_cf_netcdf_dataset(file) -> bool:
 def process_single_cruise(cruise, file_by_id, dtype):
     logger.info(f"Processing Cruise: {cruise['expocode']}")
     files = [file_by_id[id] for id in cruise["files"] if id in file_by_id]
+    file_hashes = {file["file_hash"]:id for id, file in file_by_id.items()}
     dtype_files_in_dataset = list(filter(lambda f: f["data_type"] == dtype and f["role"] == "dataset", files))
     cf_files = list(filter(lambda f: f["data_format"] == "cf_netcdf",dtype_files_in_dataset))
     non_cf_files = list(filter(lambda f: f["data_format"] != "cf_netcdf",dtype_files_in_dataset))
@@ -92,7 +111,7 @@ def process_single_cruise(cruise, file_by_id, dtype):
             continue
         files_need_replacing[file["id"]] = file["data_format"]
 
-    logger.debug(files_need_replacing)
+    logger.info(files_need_replacing)
     if any(files_need_replacing):
         file_url = f'https://cchdo.ucsd.edu{cf_file["file_path"]}'
 
@@ -102,16 +121,27 @@ def process_single_cruise(cruise, file_by_id, dtype):
             df = xr.load_dataset(tf.name, engine="netcdf4")
         
         for fid, format in files_need_replacing.items():
+            fname = df.cchdo.gen_fname(TO_FTPYE[format])
+            logger.info(f"Converting {file_url} to {format}: {fname}")
             func = {
                 "woce": methodcaller("to_woce"),
                 "whp_netcdf": methodcaller("to_coards"),
                 "exchange": methodcaller("to_exchange"),
             }[format]
             try:
-                data = func(df.cchdo)
+                data: bytes = func(df.cchdo)
             except Exception:
                 logger.error(f"Crash on {format} conversion")
-                pass
+                continue
+            mime = TO_FTPYE_MIME[dtype][format]
+            api_data = make_cchdo_file_record(
+                data, fname, cf_file, mime=mime, data_format=format, dtype=dtype
+            )
+            if api_data["file_hash"] in file_hashes:
+                logger.error("File already exists")
+                continue
+            del api_data["file"]
+            logger.info(api_data)
 
 
 def examine_dataset_files(cruise, file_by_id, dtype):
