@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from hashlib import sha256
 import argparse
 from operator import methodcaller
+import warnings
 
 import xarray as xr
 from rich.logging import RichHandler
@@ -55,7 +56,7 @@ def make_cchdo_file_record(data: bytes, fname, file_context, mime="text/plain", 
                 "date": datetime.now(tz=timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),
-                "name": "CCHDO Website Robot",
+                "name": "CCHDO CF Robot",
                 "notes": f"Generated from {file_context['file_name']} ({file_context['id']})",
                 "type": "Generated",
             }
@@ -71,6 +72,23 @@ def make_cchdo_file_record(data: bytes, fname, file_context, mime="text/plain", 
         "role": "dataset",
         "submissions": [],
     }
+
+def gen_merge_patch():
+    return [
+        {
+            "path": "/events/0",
+            "op": "add",
+            "value": {
+                "date": datetime.now(tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "name": "CCHDO CF Robot",
+                "notes": "The CF source file was updated so this file was regenerated",
+                "type": "Replaced",
+            },
+        },
+        {"path": "/role", "op": "replace", "value": "merged"},
+    ]
 
 
 def has_cf_file(cruise, files, dtype) -> bool:
@@ -93,6 +111,7 @@ def is_cf_netcdf_dataset(file) -> bool:
     return is_cf and is_dataset
 
 def process_single_cruise(cruise, file_by_id, dtype):
+    global dirty
     logger.info(f"Processing Cruise: {cruise['expocode']}")
     files = [file_by_id[id] for id in cruise["files"] if id in file_by_id]
     file_hashes = {file["file_hash"]:id for id, file in file_by_id.items()}
@@ -101,15 +120,25 @@ def process_single_cruise(cruise, file_by_id, dtype):
     non_cf_files = list(filter(lambda f: f["data_format"] != "cf_netcdf",dtype_files_in_dataset))
     if len(cf_files) != 1:
         logger.warning("Found multiple CF files in dataset, this is not implimented yet")
+        dirty = True
         return
     
     cf_file = cf_files[0]
     cf_file_hash = cf_file["file_hash"]
     files_need_replacing = dict()
+    # preloads so things will be created
+    for ftype in TO_FTPYE:
+        files_need_replacing[ftype] = ftype
     for file in non_cf_files:
         if cf_file_hash in file["file_sources"]:
+            del files_need_replacing[file["data_format"]]
             continue
+        if len(file["cruises"]) > 1:
+            logger.warning("File attached to multiple cruises, this is not implimented yet")
+            dirty = True
+            return
         files_need_replacing[file["id"]] = file["data_format"]
+
 
     logger.info(files_need_replacing)
     if any(files_need_replacing):
@@ -129,9 +158,12 @@ def process_single_cruise(cruise, file_by_id, dtype):
                 "exchange": methodcaller("to_exchange"),
             }[format]
             try:
-                data: bytes = func(df.cchdo)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    data: bytes = func(df.cchdo)
             except Exception:
                 logger.error(f"Crash on {format} conversion")
+                dirty = True
                 continue
             mime = TO_FTPYE_MIME[dtype][format]
             api_data = make_cchdo_file_record(
@@ -139,9 +171,32 @@ def process_single_cruise(cruise, file_by_id, dtype):
             )
             if api_data["file_hash"] in file_hashes:
                 logger.error("File already exists")
+                dirty = True
                 continue
-            del api_data["file"]
-            logger.info(api_data)
+
+            r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=api_data)
+            if not r.ok:
+                dirty = True
+                logger.critical("Error uploading file")
+
+            new_id = r.json()["message"].split("/")[-1]
+            attach = s.post(
+                f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}/files/{new_id}'
+            )
+
+            if not attach.ok:
+                dirty = True
+                logger.critical("Error patching cruise")
+
+            if isinstance(fid, int):
+                file_replaced_patch = gen_merge_patch()
+                logger.info(file_replaced_patch)
+                r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_replaced_patch)
+                if not r.ok:
+                    dirty = True
+                    logger.critical("Error patching the replaced file")
+    else:
+        logger.info("Nothing to do")
 
 
 def examine_dataset_files(cruise, file_by_id, dtype):
@@ -164,62 +219,12 @@ def cruise_add_from_cf(dtype):
     for cruise in cruises_with_cf:
         process_single_cruise(cruise, file_by_id=file_by_id, dtype=dtype)
 
-    exit()
-
-    cannot_do = []
-    for cruise in cruises_no_sum:
-        cf_file = None
-        for file_id in cruise["files"]:
-            try:
-                file = file_by_id[file_id]
-            except KeyError:
-                continue
-
-            if not is_cf_netcdf_dataset(file):
-                continue
-
-            cf_file = file
-            break
-
-        if cf_file is None:
-            cannot_do.append(cruise)
-            continue
-
-        file_url = f'https://cchdo.ucsd.edu{file["file_path"]}'
-
-        with NamedTemporaryFile() as tf:
-            logger.info(f"Loading {file_url}")
-            tf.write(s.get(file_url).content)
-            df = xr.load_dataset(tf.name, engine="netcdf4")
-            sumfile = df.cchdo.to_sum()
-            logger.info(f"Generated sumfile: \n {sumfile.decode('utf8')[:1000]}[...]")
-
-        submission = make_cchdo_file_record(
-            sumfile, f"{cruise['expocode']}su.txt", cf_file
-        )
-
-        r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=submission)
-
-        id_ = r.json()["message"].split("/")[-1]
-
-        attach = s.post(
-            f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}/files/{id_}'
-        )
-
-        if not attach.ok:
-            logger.critical("Error patching cruise")
-            exit(1)
-
-        logger.info(
-            f"Cruise {cruise['expocode']} updated with sumfile from {file['file_path']}"
-        )
-
-    if len(cannot_do) > 0:
-        logger.info(f"Could not generate track for {len(cannot_do)} cruises")
-
-
 if __name__ == "__main__":
+    global dirty
+    dirty = False
     parser = argparse.ArgumentParser()
     parser.add_argument("dtype", choices=["bottle", "ctd", "summary"])
     args = parser.parse_args()
     cruise_add_from_cf(dtype=args.dtype)
+    if dirty:
+        exit(1)
