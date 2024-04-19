@@ -138,6 +138,7 @@ def process_single_cruise(cruise, file_by_id, dtype):
             dirty = True
             return
         files_need_replacing[file["id"]] = file["data_format"]
+        del files_need_replacing[file["data_format"]]
 
 
     logger.info(files_need_replacing)
