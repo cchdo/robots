@@ -162,8 +162,9 @@ def process_single_cruise(cruise, file_by_id, dtype):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     data: bytes = func(df.cchdo)
-            except Exception:
+            except Exception as err:
                 logger.error(f"Crash on {format} conversion")
+                logger.error(err)
                 dirty = True
                 continue
             mime = TO_FTPYE_MIME[dtype][format]
@@ -171,8 +172,13 @@ def process_single_cruise(cruise, file_by_id, dtype):
                 data, fname, cf_file, mime=mime, data_format=format, dtype=dtype
             )
             if api_data["file_hash"] in file_hashes:
-                logger.error("File already exists")
-                dirty = True
+                file_updated_patch = [{
+                    "op": "add",
+                    "path": "/file_sources/0",
+                    "value": cf_file["file_hash"]
+                }]
+                r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_updated_patch)
+                logger.info(f"updated file source hash for existing file {fid}")
                 continue
 
             r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=api_data)
