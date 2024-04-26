@@ -1,0 +1,27 @@
+name: Update CF Derived Files
+on: 
+    schedule:
+        # Noon UTC is about 5am San Diego time
+        - cron: "50 13 * * *"
+    workflow_dispatch:
+jobs:
+    Update-Tracklines:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                python-version: '3.11'
+                cache: 'pip'
+            - run: pip install -r requirements.txt
+            - name: Check and Update CCHDO Bottle Files
+              env:
+                CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
+              run: |
+                python controlled_file_generator/__main__.py bottle
+            - name: Check and Update CCHDO CTD Files
+              env:
+                CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
+              run: |
+                python controlled_file_generator/__main__.py ctd
