@@ -5,7 +5,7 @@ on:
         - cron: "10 12 * * *"
     workflow_dispatch:
 jobs:
-    Update-Tracklines:
+    Update-Sumfiles:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
