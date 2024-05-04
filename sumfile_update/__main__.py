@@ -73,6 +73,7 @@ def cruise_add_sumfile_from_cf():
     files = s.get("https://cchdo.ucsd.edu/api/v1/file/all").json()
 
     file_by_id = {file["id"]: file for file in files}
+    file_by_hash = {file["file_hash"]: file for file in files}
 
     ffunc = partial(has_no_sumfile, files=file_by_id)
 
@@ -110,10 +111,37 @@ def cruise_add_sumfile_from_cf():
         submission = make_cchdo_file_record(
             sumfile, f"{cruise['expocode']}su.txt", cf_file
         )
+        if (file := file_by_hash.get(submission["file_hash"])) is not None:
+            id_ = file["id"]
+            patch = [
+                {"op": "replace", "path": "/role", "value": "dataset"},
+                {"op": "replace", "path": "/data_format", "value": "woce"},
+                {"op": "replace", "path": "/data_format", "value": "woce"},
+                {"op": "replace", "path": "/data_type", "value": "summary"},
+                {"op": "replace", "path": "/file_type", "value": "text/plain"},
+                {
+                    "op": "replace",
+                    "path": "/file_name",
+                    "value": submission["file_name"],
+                },
+            ]
+            r = s.post(f"https://cchdo.ucsd.edu/api/v1/file/{id_}")
+            if not r.ok:
+                logger.critical(f"Could not reactivate file {id_}")
+                exit(1)
+            r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{id_}", json=patch)
+            if not r.ok:
+                logger.critical(f"Could not patch file {id_}")
+                exit(1)
 
-        r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=submission)
+        else:
+            r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=submission)
 
-        id_ = r.json()["message"].split("/")[-1]
+            if not r.ok:
+                logger.critical("Could not create sumfile")
+                exit(1)
+
+            id_ = r.json()["message"].split("/")[-1]
 
         attach = s.post(
             f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}/files/{id_}'
