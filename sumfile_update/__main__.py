@@ -152,7 +152,7 @@ def cruise_add_sumfile_from_cf():
             exit(1)
 
         logger.info(
-            f"Cruise {cruise['expocode']} updated with sumfile from {file['file_path']}"
+            f"Cruise {cruise['expocode']} updated with sumfile from {cf_file['file_path']}"
         )
 
     if len(cannot_do) > 0:
