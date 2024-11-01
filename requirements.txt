@@ -1,3 +1,3 @@
-cchdo.hydro[netcdf]==1.0.2.11
+cchdo.hydro[netcdf]==1.0.2.12
 cchdo.auth==1.0.2
 rich
