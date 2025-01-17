@@ -8,6 +8,9 @@ jobs:
     Update-Tracklines:
         runs-on: ubuntu-24.04-arm
         steps:
+          # temp fix for env in arm
+            - name: Fix environment for ARM64 Linux runners (actions/partner-runner-images#25)
+              run: for var in PATH XDG_CONFIG_HOME; do sed -Ee "s/^/${var}=/" -e 's/(runner)admin/\1/g' <<< "${!var}"; done | tee -a "$GITHUB_ENV"
             - uses: actions/checkout@v4
 
             - name: Install uv
