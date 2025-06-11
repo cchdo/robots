@@ -4,6 +4,7 @@
 #     "cchdo-auth==1.0.2",
 #     "cchdo-hydro[netcdf]==1.0.2.12",
 #     "rich",
+#     "xarray==2025.4.0",
 # ]
 # ///
 from tempfile import NamedTemporaryFile
