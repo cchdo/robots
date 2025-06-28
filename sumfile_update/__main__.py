@@ -2,9 +2,8 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "cchdo-auth==1.0.2",
-#     "cchdo-hydro[netcdf]==1.0.2.12",
+#     "cchdo-hydro[netcdf]==1.0.2.13",
 #     "rich",
-#     "xarray==2025.4.0",
 # ]
 # ///
 from tempfile import NamedTemporaryFile
