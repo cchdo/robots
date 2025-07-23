@@ -4,6 +4,10 @@ on:
         # Noon UTC is about 5am San Diego time
         - cron: "10 12 * * *"
     workflow_dispatch:
+
+env:
+  COLUMNS: 180
+
 jobs:
     Update-Sumfiles:
         runs-on: ubuntu-latest
