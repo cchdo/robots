@@ -20,6 +20,7 @@ from rich.console import Console
 import cchdo.hydro.accessors  # noqa
 from cchdo.auth.session import session as s
 
+print("::endgroup::")
 console = Console(color_system="256")
 
 logger = logging.getLogger(__name__)

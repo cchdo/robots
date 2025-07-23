@@ -24,4 +24,5 @@ jobs:
               env:
                 CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
               run: |
+                echo "::group::Install Dependencies"
                 uv run sumfile_update/__main__.py
