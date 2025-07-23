@@ -15,15 +15,18 @@ from hashlib import sha256
 
 import xarray as xr
 from rich.logging import RichHandler
+from rich.console import Console
 
 import cchdo.hydro.accessors  # noqa
 from cchdo.auth.session import session as s
+
+console = Console(color_system="256")
 
 logger = logging.getLogger(__name__)
 
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)]
 )
 
 
@@ -164,7 +167,7 @@ def cruise_add_sumfile_from_cf():
         )
 
     if len(cannot_do) > 0:
-        logger.info(f"Could not generate track for {len(cannot_do)} cruises")
+        logger.info(f"Could not generate sumfile for {len(cannot_do)} cruises")
 
 
 if __name__ == "__main__":
