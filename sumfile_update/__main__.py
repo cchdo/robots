@@ -100,17 +100,18 @@ def is_cf_netcdf_dataset(file) -> bool:
 
 
 def cruise_add_sumfile_from_cf():
-    logger.info("Loading Cruise and File information")
-    cruises = s.get("https://cchdo.ucsd.edu/api/v1/cruise/all").json()
-    files = s.get("https://cchdo.ucsd.edu/api/v1/file/all").json()
+    with GHAGroup("Load Cruise and File Metadata"):
+        logger.info("Loading Cruise and File information")
+        cruises = s.get("https://cchdo.ucsd.edu/api/v1/cruise/all").json()
+        files = s.get("https://cchdo.ucsd.edu/api/v1/file/all").json()
 
-    file_by_id = {file["id"]: file for file in files}
-    file_by_hash = {file["file_hash"]: file for file in files}
+        file_by_id = {file["id"]: file for file in files}
+        file_by_hash = {file["file_hash"]: file for file in files}
 
-    ffunc = partial(has_no_sumfile, files=file_by_id)
+        ffunc = partial(has_no_sumfile, files=file_by_id)
 
-    cruises_no_sum = list(filter(ffunc, cruises))
-    logger.info(f"{len(cruises_no_sum)} of {len(cruises)} cruises have no sumfile")
+        cruises_no_sum = list(filter(ffunc, cruises))
+        logger.info(f"{len(cruises_no_sum)} of {len(cruises)} cruises have no sumfile")
 
     cannot_do = []
     for cruise in cruises_no_sum:
@@ -133,59 +134,63 @@ def cruise_add_sumfile_from_cf():
 
         file_url = f"https://cchdo.ucsd.edu{file['file_path']}"
 
-        with NamedTemporaryFile() as tf:
-            logger.info(f"Loading {file_url}")
-            tf.write(s.get(file_url).content)
-            df = xr.load_dataset(tf.name, engine="netcdf4")
-            sumfile = df.cchdo.to_sum()
-            logger.info(f"Generated sumfile: \n {sumfile.decode('utf8')[:1000]}[...]")
+        with GHAGroup(f"Generating sumfile for: {cruise['expocode']}"):
+            with NamedTemporaryFile() as tf:
+                logger.info(f"Loading {file_url}")
+                tf.write(s.get(file_url).content)
+                df = xr.load_dataset(tf.name, engine="netcdf4")
+                sumfile = df.cchdo.to_sum()
+                logger.info(f"Generated sumfile: \n {sumfile.decode('utf8')[:1000]}[...]")
 
-        submission = make_cchdo_file_record(
-            sumfile, f"{cruise['expocode']}su.txt", cf_file
-        )
-        if (file := file_by_hash.get(submission["file_hash"])) is not None:
-            id_ = file["id"]
-            patch = [
-                {"op": "replace", "path": "/role", "value": "dataset"},
-                {"op": "replace", "path": "/data_format", "value": "woce"},
-                {"op": "replace", "path": "/data_format", "value": "woce"},
-                {"op": "replace", "path": "/data_type", "value": "summary"},
-                {"op": "replace", "path": "/file_type", "value": "text/plain"},
-                {
-                    "op": "replace",
-                    "path": "/file_name",
-                    "value": submission["file_name"],
-                },
-            ]
-            r = s.post(f"https://cchdo.ucsd.edu/api/v1/file/{id_}")
-            if not r.ok:
-                logger.critical(f"Could not reactivate file {id_}")
+            submission = make_cchdo_file_record(
+                sumfile, f"{cruise['expocode']}su.txt", cf_file
+            )
+            if (file := file_by_hash.get(submission["file_hash"])) is not None:
+                id_ = file["id"]
+                patch = [
+                    {"op": "replace", "path": "/role", "value": "dataset"},
+                    {"op": "replace", "path": "/data_format", "value": "woce"},
+                    {"op": "replace", "path": "/data_format", "value": "woce"},
+                    {"op": "replace", "path": "/data_type", "value": "summary"},
+                    {"op": "replace", "path": "/file_type", "value": "text/plain"},
+                    {
+                        "op": "replace",
+                        "path": "/file_name",
+                        "value": submission["file_name"],
+                    },
+                ]
+                r = s.post(f"https://cchdo.ucsd.edu/api/v1/file/{id_}")
+                if not r.ok:
+                    logger.critical(f"Could not reactivate file {id_}")
+                    exit(1)
+                r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{id_}", json=patch)
+                if not r.ok:
+                    logger.critical(f"Could not patch file {id_}")
+                    exit(1)
+
+            else:
+                r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=submission)
+
+                if not r.ok:
+                    logger.critical("Could not create sumfile")
+                    exit(1)
+
+                id_ = r.json()["message"].split("/")[-1]
+
+            attach = s.post(
+                f"https://cchdo.ucsd.edu/api/v1/cruise/{cruise['id']}/files/{id_}"
+            )
+
+            if not attach.ok:
+                logger.critical("Error patching cruise")
                 exit(1)
-            r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{id_}", json=patch)
-            if not r.ok:
-                logger.critical(f"Could not patch file {id_}")
-                exit(1)
 
-        else:
-            r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=submission)
+            logger.info(
+                f"Cruise {cruise['expocode']} updated with sumfile from {cf_file['file_path']}"
+            )
 
-            if not r.ok:
-                logger.critical("Could not create sumfile")
-                exit(1)
-
-            id_ = r.json()["message"].split("/")[-1]
-
-        attach = s.post(
-            f"https://cchdo.ucsd.edu/api/v1/cruise/{cruise['id']}/files/{id_}"
-        )
-
-        if not attach.ok:
-            logger.critical("Error patching cruise")
-            exit(1)
-
-        logger.info(
-            f"Cruise {cruise['expocode']} updated with sumfile from {cf_file['file_path']}"
-        )
+    if len(cannot_do) == len(cruises_no_sum):
+        logger.info("No sumfiles were generated")
 
     if len(cannot_do) > 0:
         with GHAGroup("Cruises where a sumfile could not be generated"):
