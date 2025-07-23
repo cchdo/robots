@@ -6,7 +6,7 @@ on:
     workflow_dispatch:
 
 env:
-  COLUMNS: 180
+  COLUMNS: 120
 
 jobs:
     Update-Sumfiles:
