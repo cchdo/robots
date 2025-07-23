@@ -12,6 +12,8 @@ from functools import partial
 from base64 import b64encode
 from datetime import datetime, timezone
 from hashlib import sha256
+import os
+from contextlib import contextmanager
 
 import xarray as xr
 from rich.logging import RichHandler
@@ -20,15 +22,33 @@ from rich.console import Console
 import cchdo.hydro.accessors  # noqa
 from cchdo.auth.session import session as s
 
-print("::endgroup::")
+ON_GHA = "GITHUB_RUN_ID" in os.environ
+
+if ON_GHA:
+    # closes the group started by the calling run line
+    # This group is for the uv installs
+    print("::endgroup::")
+
 console = Console(color_system="256")
 
 logger = logging.getLogger(__name__)
 
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)]
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(console=console)],
 )
+
+
+@contextmanager
+def GHAGroup(group_name: str):
+    if ON_GHA:
+        print(f"::group::{group_name}")
+    yield
+    if ON_GHA:
+        print("::endgroup::")
 
 
 def make_cchdo_file_record(sumfile, fname, file_context):
@@ -108,10 +128,10 @@ def cruise_add_sumfile_from_cf():
             break
 
         if cf_file is None:
-            cannot_do.append(cruise)
+            cannot_do.append(cruise["expocode"])
             continue
 
-        file_url = f'https://cchdo.ucsd.edu{file["file_path"]}'
+        file_url = f"https://cchdo.ucsd.edu{file['file_path']}"
 
         with NamedTemporaryFile() as tf:
             logger.info(f"Loading {file_url}")
@@ -156,7 +176,7 @@ def cruise_add_sumfile_from_cf():
             id_ = r.json()["message"].split("/")[-1]
 
         attach = s.post(
-            f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}/files/{id_}'
+            f"https://cchdo.ucsd.edu/api/v1/cruise/{cruise['id']}/files/{id_}"
         )
 
         if not attach.ok:
@@ -168,7 +188,9 @@ def cruise_add_sumfile_from_cf():
         )
 
     if len(cannot_do) > 0:
-        logger.info(f"Could not generate sumfile for {len(cannot_do)} cruises")
+        with GHAGroup("Cruises where a sumfile could not be generated"):
+            logger.info(f"Could not generate sumfile for {len(cannot_do)} cruises:")
+            logger.info(cannot_do)
 
 
 if __name__ == "__main__":
