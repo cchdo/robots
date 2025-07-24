@@ -4,9 +4,13 @@ on:
         # Noon UTC is about 5am San Diego time
         - cron: "50 13 * * *"
     workflow_dispatch:
+
+env:
+  COLUMNS: 120
+
 jobs:
     Update-CF-Derived:
-        runs-on: ubuntu-24.04
+        runs-on: ubuntu-24.04-arm
         steps:
             - uses: actions/checkout@v4
 
@@ -24,9 +28,11 @@ jobs:
               env:
                 CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
               run: |
+                echo "::group::Install Dependencies"
                 uv run controlled_file_generator/__main__.py bottle
             - name: Check and Update CCHDO CTD Files
               env:
                 CCHDO_AUTH_API_KEY: ${{ secrets.CCHDO_AUTH_TOKEN }}
               run: |
+                echo "::group::Install Dependencies"
                 uv run controlled_file_generator/__main__.py ctd
