@@ -21,6 +21,7 @@ from contextlib import contextmanager
 
 import xarray as xr
 from rich.logging import RichHandler
+from rich.console import Console
 
 import cchdo.hydro.accessors  # noqa
 from cchdo.auth.session import session as s
@@ -42,9 +43,11 @@ def GHAGroup(group_name: str):
 
 logger = logging.getLogger(__name__)
 
+console = Console(color_system="256")
+
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="DEBUG", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+    level="DEBUG", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)]
 )
 
 TO_FTPYE = {
