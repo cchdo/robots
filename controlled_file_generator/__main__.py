@@ -33,6 +33,7 @@ if ON_GHA:
     # This group is for the uv installs
     print("::endgroup::")
 
+
 @contextmanager
 def GHAGroup(group_name: str):
     if ON_GHA:
@@ -41,13 +42,17 @@ def GHAGroup(group_name: str):
     if ON_GHA:
         print("::endgroup::")
 
+
 logger = logging.getLogger(__name__)
 
 console = Console(color_system="256")
 
 FORMAT = "%(message)s"
 logging.basicConfig(
-    level="DEBUG", format=FORMAT, datefmt="[%X]", handlers=[RichHandler(console=console)]
+    level="DEBUG",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(console=console)],
 )
 
 TO_FTPYE = {
@@ -69,7 +74,14 @@ TO_FTPYE_MIME = {
 }
 
 
-def make_cchdo_file_record(data: bytes, fname, file_context, mime="text/plain", data_format="exchange", dtype="ctd"):
+def make_cchdo_file_record(
+    data: bytes,
+    fname,
+    file_context,
+    mime="text/plain",
+    data_format="exchange",
+    dtype="ctd",
+):
     return {
         "file": {
             "type": mime,
@@ -102,6 +114,7 @@ def make_cchdo_file_record(data: bytes, fname, file_context, mime="text/plain", 
         "submissions": [],
     }
 
+
 def gen_merge_patch():
     return [
         {
@@ -123,9 +136,14 @@ def gen_merge_patch():
 def has_cf_file(cruise, files, dtype) -> bool:
     for file in cruise["files"]:
         if (fmeta := files.get(file)) is not None:
-            if fmeta["role"] == "dataset" and fmeta["data_type"] == dtype and fmeta["data_format"] == "cf_netcdf":
+            if (
+                fmeta["role"] == "dataset"
+                and fmeta["data_type"] == dtype
+                and fmeta["data_format"] == "cf_netcdf"
+            ):
                 return True
     return False
+
 
 def cf_robot_enabled(cruise, dtype="ctd"):
     if "cf_robots" in cruise and dtype in cruise["cf_robots"]:
@@ -139,16 +157,25 @@ def is_cf_netcdf_dataset(file) -> bool:
     is_dataset = file["role"] == "dataset"
     return is_cf and is_dataset
 
+
 def get_files_neededing_replacment(cruise, file_by_id, dtype):
-    logger.debug(f'Checking {cruise["expocode"]}')
+    logger.debug(f"Checking {cruise['expocode']}")
     files = [file_by_id[id] for id in cruise["files"] if id in file_by_id]
-    dtype_files_in_dataset = list(filter(lambda f: f["data_type"] == dtype and f["role"] == "dataset", files))
-    cf_files = list(filter(lambda f: f["data_format"] == "cf_netcdf",dtype_files_in_dataset))
-    non_cf_files = list(filter(lambda f: f["data_format"] != "cf_netcdf",dtype_files_in_dataset))
+    dtype_files_in_dataset = list(
+        filter(lambda f: f["data_type"] == dtype and f["role"] == "dataset", files)
+    )
+    cf_files = list(
+        filter(lambda f: f["data_format"] == "cf_netcdf", dtype_files_in_dataset)
+    )
+    non_cf_files = list(
+        filter(lambda f: f["data_format"] != "cf_netcdf", dtype_files_in_dataset)
+    )
     if len(cf_files) != 1:
-        logger.warning(f"Cruise  {cruise['expocode']}: Found multiple CF files in dataset, this is not implemented yet")
+        logger.warning(
+            f"Cruise  {cruise['expocode']}: Found multiple CF files in dataset, this is not implemented yet"
+        )
         return "Multiple CF Files"
-    
+
     cf_file = cf_files[0]
     cf_file_hash = cf_file["file_hash"]
     files_need_replacing = dict()
@@ -160,7 +187,9 @@ def get_files_neededing_replacment(cruise, file_by_id, dtype):
             del files_need_replacing[file["data_format"]]
             continue
         if len(file["cruises"]) > 1:
-            logger.warning(f"Cruise  {cruise['expocode']}:File attached to multiple cruises, this is not implemented yet")
+            logger.warning(
+                f"Cruise  {cruise['expocode']}:File attached to multiple cruises, this is not implemented yet"
+            )
             return "Attached to Multiple Cruises"
         files_need_replacing[file["id"]] = file["data_format"]
         del files_need_replacing[file["data_format"]]
@@ -170,14 +199,14 @@ def get_files_neededing_replacment(cruise, file_by_id, dtype):
 
 def process_single_cruise(cruise, dtype, file_by_id, cf_file, files_need_replacing):
     global dirty
-    file_url = f'https://cchdo.ucsd.edu{cf_file["file_path"]}'
-    file_hashes = {file["file_hash"]:id for id, file in file_by_id.items()}
+    file_url = f"https://cchdo.ucsd.edu{cf_file['file_path']}"
+    file_hashes = {file["file_hash"]: id for id, file in file_by_id.items()}
 
     with NamedTemporaryFile() as tf:
         logger.info(f"Loading {file_url}")
         tf.write(s.get(file_url).content)
         df = xr.load_dataset(tf.name, engine="netcdf4")
-    
+
     for fid, format in files_need_replacing.items():
         fname = df.cchdo.gen_fname(TO_FTPYE[format])
         logger.info(f"Converting {file_url} to {format}: {fname}")
@@ -200,12 +229,12 @@ def process_single_cruise(cruise, dtype, file_by_id, cf_file, files_need_replaci
             data, fname, cf_file, mime=mime, data_format=format, dtype=dtype
         )
         if api_data["file_hash"] in file_hashes:
-            file_updated_patch = [{
-                "op": "add",
-                "path": "/file_sources/0",
-                "value": cf_file["file_hash"]
-            }]
-            r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_updated_patch)
+            file_updated_patch = [
+                {"op": "add", "path": "/file_sources/0", "value": cf_file["file_hash"]}
+            ]
+            r = s.patch(
+                f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_updated_patch
+            )
             logger.info(f"updated file source hash for existing file {fid}")
             continue
 
@@ -216,7 +245,7 @@ def process_single_cruise(cruise, dtype, file_by_id, cf_file, files_need_replaci
 
         new_id = r.json()["message"].split("/")[-1]
         attach = s.post(
-            f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}/files/{new_id}'
+            f"https://cchdo.ucsd.edu/api/v1/cruise/{cruise['id']}/files/{new_id}"
         )
 
         if not attach.ok:
@@ -226,10 +255,13 @@ def process_single_cruise(cruise, dtype, file_by_id, cf_file, files_need_replaci
         if isinstance(fid, int):
             file_replaced_patch = gen_merge_patch()
             logger.info(file_replaced_patch)
-            r = s.patch(f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_replaced_patch)
+            r = s.patch(
+                f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_replaced_patch
+            )
             if not r.ok:
                 dirty = True
                 logger.critical("Error patching the replaced file")
+
 
 def cruise_add_from_cf(dtype):
     global dirty
@@ -281,7 +313,13 @@ def cruise_add_from_cf(dtype):
         cruise = cruise_by_expocode[expocode]
         cf_file, files_need_replacing = result
         with GHAGroup(f"Processing cruise {expocode}"):
-            process_single_cruise(cruise, dtype=dtype, file_by_id=file_by_id, cf_file=cf_file, files_need_replacing=files_need_replacing)
+            process_single_cruise(
+                cruise,
+                dtype=dtype,
+                file_by_id=file_by_id,
+                cf_file=cf_file,
+                files_need_replacing=files_need_replacing,
+            )
 
 
 if __name__ == "__main__":

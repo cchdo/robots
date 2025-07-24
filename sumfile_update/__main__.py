@@ -140,7 +140,9 @@ def cruise_add_sumfile_from_cf():
                 tf.write(s.get(file_url).content)
                 df = xr.load_dataset(tf.name, engine="netcdf4")
                 sumfile = df.cchdo.to_sum()
-                logger.info(f"Generated sumfile: \n {sumfile.decode('utf8')[:1000]}[...]")
+                logger.info(
+                    f"Generated sumfile: \n {sumfile.decode('utf8')[:1000]}[...]"
+                )
 
             submission = make_cchdo_file_record(
                 sumfile, f"{cruise['expocode']}su.txt", cf_file

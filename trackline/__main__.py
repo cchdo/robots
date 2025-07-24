@@ -62,7 +62,7 @@ def cruise_add_cruise_track_from_cf():
             cannot_do.append(cruise)
             continue
 
-        file_url = f'https://cchdo.ucsd.edu{file["file_path"]}'
+        file_url = f"https://cchdo.ucsd.edu{file['file_path']}"
 
         with NamedTemporaryFile() as tf:
             logger.info(f"Loading {file_url}")
@@ -75,7 +75,7 @@ def cruise_add_cruise_track_from_cf():
         logger.info(f"Generated patch {patch}")
 
         response = s.patch(
-            f'https://cchdo.ucsd.edu/api/v1/cruise/{cruise["id"]}', json=patch
+            f"https://cchdo.ucsd.edu/api/v1/cruise/{cruise['id']}", json=patch
         )
 
         if not response.ok:
