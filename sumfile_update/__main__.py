@@ -138,7 +138,7 @@ def cruise_add_sumfile_from_cf():
             with NamedTemporaryFile() as tf:
                 logger.info(f"Loading {file_url}")
                 tf.write(s.get(file_url).content)
-                df = xr.load_dataset(tf.name, engine="netcdf4")
+                df = xr.load_dataset(tf.name, engine="netcdf4", decode_timedelta=False)
                 sumfile = df.cchdo.to_sum()
                 logger.info(
                     f"Generated sumfile: \n {sumfile.decode('utf8')[:1000]}[...]"

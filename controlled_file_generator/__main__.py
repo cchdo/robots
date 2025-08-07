@@ -205,7 +205,7 @@ def process_single_cruise(cruise, dtype, file_by_id, cf_file, files_need_replaci
     with NamedTemporaryFile() as tf:
         logger.info(f"Loading {file_url}")
         tf.write(s.get(file_url).content)
-        df = xr.load_dataset(tf.name, engine="netcdf4")
+        df = xr.load_dataset(tf.name, engine="netcdf4", decode_timedelta=False)
 
     for fid, format in files_need_replacing.items():
         fname = df.cchdo.gen_fname(TO_FTPYE[format])

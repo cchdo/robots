@@ -67,7 +67,7 @@ def cruise_add_cruise_track_from_cf():
         with NamedTemporaryFile() as tf:
             logger.info(f"Loading {file_url}")
             tf.write(s.get(file_url).content)
-            df = xr.load_dataset(tf.name, engine="netcdf4")
+            df = xr.load_dataset(tf.name, engine="netcdf4", decode_timedelta=False)
             track = df.cchdo.track
 
         patch = [{"op": "replace", "path": "/geometry/track", "value": track}]
