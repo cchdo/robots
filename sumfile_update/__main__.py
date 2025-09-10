@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "cchdo-auth==1.0.2",
-#     "cchdo-hydro[netcdf]==1.0.2.13",
+#     "cchdo-hydro[netcdf]==1.0.2.14",
 #     "rich",
 # ]
 # ///
