@@ -1,8 +1,8 @@
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = [
 #     "cchdo-auth==1.0.2",
-#     "cchdo-hydro[netcdf]==1.0.2.14",
+#     "cchdo-hydro[netcdf]==1.0.2.15",
 #     "rich",
 # ]
 # ///
