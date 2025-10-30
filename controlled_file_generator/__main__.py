@@ -148,7 +148,7 @@ def gen_verified_patch(fname, cf_file, mime, data_format, dtype):
                 .isoformat()
                 .replace("+00:00", "Z"),
                 "name": "CCHDO CF Robot",
-                "notes": "The CF source file was updated but it did change the contents of this file.",
+                "notes": "The CF source file was updated but it did not change the contents of this file.",
                 "type": "Verified",
             },
         },
