@@ -132,6 +132,28 @@ def gen_merge_patch():
         {"path": "/role", "op": "replace", "value": "merged"},
     ]
 
+def gen_verified_patch(fname, cf_file, mime, data_format, dtype):
+    return [
+        {"path": "/role", "op": "replace", "value": "dataset"},
+        {"path": "/file_name", "op": "replace", "value": fname},
+        {"path": "/file_type", "op": "replace", "value": mime},
+        {"path": "/data_format", "op": "replace", "value": data_format},
+        {"path": "/data_type", "op": "replace", "value": dtype},
+        {"op": "add", "path": "/file_sources/0", "value": cf_file["file_hash"]},
+        {
+            "path": "/events/0",
+            "op": "add",
+            "value": {
+                "date": datetime.now(tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "name": "CCHDO CF Robot",
+                "notes": "The CF source file was updated but it did change the contents of this file.",
+                "type": "Verified",
+            },
+        },
+    ] # type: ignore
+
 
 def has_cf_file(cruise, files, dtype) -> bool:
     for file in cruise["files"]:
@@ -228,14 +250,12 @@ def process_single_cruise(cruise, dtype, file_by_id, cf_file, files_need_replaci
         api_data = make_cchdo_file_record(
             data, fname, cf_file, mime=mime, data_format=format, dtype=dtype
         )
-        if api_data["file_hash"] in file_hashes:
-            file_updated_patch = [
-                {"op": "add", "path": "/file_sources/0", "value": cf_file["file_hash"]}
-            ]
+        if (existing_id := file_hashes.get(api_data["file_hash"])) is not None:
+            file_updated_patch = gen_verified_patch(fname, cf_file, mime=mime, data_format=format, dtype=dtype)
             r = s.patch(
-                f"https://cchdo.ucsd.edu/api/v1/file/{fid}", json=file_updated_patch
+                f"https://cchdo.ucsd.edu/api/v1/file/{existing_id}", json=file_updated_patch
             )
-            logger.info(f"updated file source hash for existing file {fid}")
+            logger.info(f"updated file source hash and metadata for existing file {fid}")
             continue
 
         r = s.post("https://cchdo.ucsd.edu/api/v1/file", json=api_data)
